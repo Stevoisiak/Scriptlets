@@ -12,11 +12,17 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 
 ## [Unreleased]
 
+### Changed
+
+- `prevent-fetch` now supports a structured `responseConfig` argument for overriding synthetic response fields such as
+  `ok`, `redirected`, `status`, `statusText`, and extended `type` values [#529].
+
 ### Fixed
 
 - Added the missing `google.ima.dai.api.StreamRequest.StreamFormat` object to the `google-ima3-dai` redirect.
 
 [Unreleased]: https://github.com/AdguardTeam/Scriptlets/compare/v2.4.2...HEAD
+[#529]: https://github.com/AdguardTeam/Scriptlets/issues/529
 
 ## [2.4.2] - 2026-04-24
 
