@@ -5,9 +5,12 @@ import {
     createResponse,
     defineReadonlyResponseProps,
     getFilteredResponseDefaults,
+    getResolvedResponseConfig,
     getSafeResponseStatus,
     isSuccessResponseStatus,
+    isValidResponseStatus,
     modifyResponse,
+    parseResponseConfig,
 } from '../../src/helpers';
 
 describe('Response utils tests', () => {
@@ -42,6 +45,53 @@ describe('Response utils tests', () => {
         { actual: undefined, expected: 200 },
     ])('Checks safe response status: $actual', ({ actual, expected }) => {
         expect(getSafeResponseStatus(actual)).toBe(expected);
+    });
+
+    test.each([
+        { actual: 0, expected: true },
+        { actual: 100, expected: true },
+        { actual: 599, expected: true },
+        { actual: -1, expected: false },
+        { actual: 600, expected: false },
+        { actual: 200.5, expected: false },
+        { actual: '200', expected: false },
+    ])('Checks valid response status override: $actual', ({ actual, expected }) => {
+        expect(isValidResponseStatus(actual)).toBe(expected);
+    });
+
+    test('Parses shorthand response config', () => {
+        expect(parseResponseConfig('opaque')).toStrictEqual({
+            type: 'opaque',
+        });
+    });
+
+    test('Parses structured response config', () => {
+        expect(parseResponseConfig('{"status":404,"statusText":"Not Found","ok":false}')).toStrictEqual({
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+        });
+    });
+
+    test('Reports invalid response config', () => {
+        const invalidValues = [];
+
+        expect(parseResponseConfig('{"status":"invalid"}', (value) => invalidValues.push(value))).toBeNull();
+        expect(invalidValues).toStrictEqual(['{"status":"invalid"}']);
+    });
+
+    test('Resolves response config with fallback type', () => {
+        expect(getResolvedResponseConfig(undefined, 'cors')).toStrictEqual({
+            type: 'cors',
+        });
+
+        expect(getResolvedResponseConfig({
+            ok: false,
+            type: 'opaque',
+        }, 'cors')).toStrictEqual({
+            ok: false,
+            type: 'opaque',
+        });
     });
 
     test('Defines readonly response properties', () => {
@@ -238,13 +288,27 @@ describe('Response utils tests', () => {
         });
 
         expect(response.body).toBeNull();
-        expect(response.headers.get('content-length')).toStrictEqual('4');
+        expect(response.headers.get('content-length')).toBeNull();
         expect(response.ok).toBeTruthy();
         expect(response.redirected).toBeTruthy();
         expect(response.status).toStrictEqual(100);
         expect(response.statusText).toStrictEqual('Continue');
         expect(response.type).toStrictEqual('error');
         expect(response.url).toStrictEqual('');
+    });
+
+    test('Creates filtered synthetic response hiding provided headers', () => {
+        const response = createResponse({
+            body: 'test',
+            headers: {
+                'Content-Length': '4',
+                'X-Test': '1',
+            },
+            type: 'opaque',
+        });
+
+        expect(response.headers.get('content-length')).toBeNull();
+        expect(response.headers.get('x-test')).toBeNull();
     });
 
     test('Creates synthetic response allowing zero status override', async () => {

@@ -8,9 +8,12 @@ import {
     copyResponseHeaders,
     defineReadonlyResponseProps,
     getFilteredResponseDefaults,
+    getResolvedResponseConfig,
     getSafeResponseStatus,
     isSuccessResponseStatus,
+    isValidResponseStatus,
     modifyResponse,
+    parseResponseConfig,
     toRegExp,
     isValidStrPattern,
     escapeRegExp,
@@ -159,139 +162,8 @@ export function preventFetch(source, propsToMatch, responseBody = 'emptyObj', re
         return;
     }
 
-    const SUPPORTED_RESPONSE_TYPES = new Set([
-        'basic',
-        'cors',
-        'error',
-        'opaque',
-        'opaqueredirect',
-    ]);
-    const SUPPORTED_STATUS_TEXTS = new Set([
-        '',
-        'OK',
-        'Continue',
-        'Not Found',
-    ]);
     const INVALID_RESPONSE_VALUE_MARKER = null;
-    const isResponseTypeSupported = (value) => SUPPORTED_RESPONSE_TYPES.has(value);
-    const isResponseStatusTextSupported = (value) => SUPPORTED_STATUS_TEXTS.has(value);
-    const isValidResponseStatus = (value) => {
-        const isInteger = nativeIsFinite(value) && Math.floor(value) === value;
-        // `0` is used for filtered responses, may be useful when
-        // response type is set to `error`, `opaque` or `opaqueredirect`.
-        // While regular HTTP statuses stay within `100..599`.
-        // Values above `599` are outside the standard HTTP status code space.
-        return isInteger && value >= 0 && value <= 599;
-    };
     const getInvalidResponseConfigMessage = (value) => `Invalid responseConfig parameter: '${value}'`;
-
-    /**
-     * Parse the response config argument into a normalized override object.
-     *
-     * @param {string|undefined} value - Raw responseConfig argument.
-     * @returns {*} Parsed response config.
-     */
-    const parseResponseConfig = (value) => {
-        if (typeof value === 'undefined') {
-            return undefined;
-        }
-
-        if (isResponseTypeSupported(value)) {
-            return {
-                type: value,
-            };
-        }
-
-        if (typeof value !== 'string') {
-            logMessage(source, getInvalidResponseConfigMessage(value));
-            return INVALID_RESPONSE_VALUE_MARKER;
-        }
-
-        const trimmedResponseConfig = value.trim();
-        if (!trimmedResponseConfig.startsWith('{') || !trimmedResponseConfig.endsWith('}')) {
-            logMessage(source, getInvalidResponseConfigMessage(value));
-            return INVALID_RESPONSE_VALUE_MARKER;
-        }
-
-        let parsedResponseConfig;
-        try {
-            parsedResponseConfig = JSON.parse(trimmedResponseConfig);
-        } catch (error) {
-            logMessage(source, getInvalidResponseConfigMessage(value));
-            return INVALID_RESPONSE_VALUE_MARKER;
-        }
-
-        if (
-            !parsedResponseConfig
-            || Array.isArray(parsedResponseConfig)
-            || typeof parsedResponseConfig !== 'object'
-        ) {
-            logMessage(source, getInvalidResponseConfigMessage(value));
-            return INVALID_RESPONSE_VALUE_MARKER;
-        }
-
-        const normalizedResponseConfig = {};
-        const responseConfigKeys = Object.keys(parsedResponseConfig);
-
-        for (let i = 0; i < responseConfigKeys.length; i += 1) {
-            const key = responseConfigKeys[i];
-            const parsedValue = parsedResponseConfig[key];
-
-            if ((key === 'ok' || key === 'redirected') && typeof parsedValue === 'boolean') {
-                normalizedResponseConfig[key] = parsedValue;
-                continue;
-            }
-
-            if (key === 'status' && isValidResponseStatus(parsedValue)) {
-                normalizedResponseConfig[key] = parsedValue;
-                continue;
-            }
-
-            if (
-                key === 'statusText'
-                && typeof parsedValue === 'string'
-                && isResponseStatusTextSupported(parsedValue)
-            ) {
-                normalizedResponseConfig[key] = parsedValue;
-                continue;
-            }
-
-            if (
-                key === 'type'
-                && typeof parsedValue === 'string'
-                && isResponseTypeSupported(parsedValue)
-            ) {
-                normalizedResponseConfig[key] = parsedValue;
-                continue;
-            }
-
-            logMessage(source, getInvalidResponseConfigMessage(value));
-            return INVALID_RESPONSE_VALUE_MARKER;
-        }
-
-        return normalizedResponseConfig;
-    };
-
-    /**
-     * Merge parsed response config with a detected fallback response type.
-     *
-     * @param {*} parsedConfig - Parsed response config.
-     * @param {string|undefined} fallbackType - Response type inferred from the request.
-     * @returns {*} Resolved response config.
-     */
-    const getResolvedResponseConfig = (parsedConfig, fallbackType) => {
-        const resolvedResponseConfig = {};
-
-        if (typeof fallbackType !== 'undefined') {
-            resolvedResponseConfig.type = fallbackType;
-        }
-
-        if (typeof parsedConfig === 'undefined') {
-            return resolvedResponseConfig;
-        }
-
-        return Object.assign(resolvedResponseConfig, parsedConfig);
-    };
 
     const nativeRequestClone = Request.prototype.clone;
 
@@ -309,7 +181,10 @@ export function preventFetch(source, propsToMatch, responseBody = 'emptyObj', re
         return;
     }
 
-    const parsedResponseConfig = parseResponseConfig(responseConfig);
+    const parsedResponseConfig = parseResponseConfig(
+        responseConfig,
+        (invalidValue) => logMessage(source, getInvalidResponseConfigMessage(invalidValue)),
+    );
     if (parsedResponseConfig === INVALID_RESPONSE_VALUE_MARKER) {
         return;
     }
@@ -365,7 +240,7 @@ export function preventFetch(source, propsToMatch, responseBody = 'emptyObj', re
 
         if (shouldPrevent) {
             hit(source);
-            let resolvedResponseConfig;
+            let resolvedResponseConfig = {};
             try {
                 resolvedResponseConfig = getResolvedResponseConfig(parsedResponseConfig, getResponseType(fetchData));
                 const origResponse = await Reflect.apply(target, thisArg, args);
@@ -396,7 +271,6 @@ export function preventFetch(source, propsToMatch, responseBody = 'emptyObj', re
                 );
             } catch (ex) {
                 // https://github.com/AdguardTeam/Scriptlets/issues/334
-                resolvedResponseConfig = getResolvedResponseConfig(parsedResponseConfig, getResponseType(fetchData));
                 return createResponse({
                     body: strResponseBody,
                     ok: resolvedResponseConfig.ok,
@@ -443,9 +317,12 @@ preventFetch.injections = [
     copyResponseHeaders,
     defineReadonlyResponseProps,
     getFilteredResponseDefaults,
+    getResolvedResponseConfig,
     getSafeResponseStatus,
     isSuccessResponseStatus,
+    isValidResponseStatus,
     modifyResponse,
+    parseResponseConfig,
     toRegExp,
     isValidStrPattern,
     escapeRegExp,

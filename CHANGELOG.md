@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 
 - `google-ima3-dai` redirect resource and scriptlet [#239].
 
-## Changed
+### Changed
 
 - Updated [@adguard/agtree] to 4.1.1
 

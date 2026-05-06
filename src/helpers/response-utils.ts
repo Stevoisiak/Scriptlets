@@ -12,6 +12,14 @@ type SyntheticResponseData = ReplacementData & {
     requestUrl?: string;
 };
 
+type ResponseConfigData = {
+    ok?: boolean;
+    redirected?: boolean;
+    status?: number;
+    statusText?: string;
+    type?: string;
+};
+
 /**
  * Copies response headers into a plain object accepted by the Response constructor.
  *
@@ -48,6 +56,149 @@ export const getSafeResponseStatus = (status: number | undefined): number => {
     }
 
     return 200;
+};
+
+/**
+ * Checks whether a value is a valid response status override.
+ *
+ * @param value Status value to validate.
+ * @returns `true` if the value is an integer in the `0..599` range.
+ */
+export const isValidResponseStatus = (value: unknown): boolean => {
+    const isInteger = typeof value === 'number' && Number.isFinite(value) && Math.floor(value) === value;
+
+    // `0` is used for filtered responses, may be useful when
+    // response type is set to `error`, `opaque` or `opaqueredirect`.
+    // While regular HTTP statuses stay within `100..599`.
+    // Values above `599` are outside the standard HTTP status code space.
+    return isInteger && value >= 0 && value <= 599;
+};
+
+/**
+ * Parses a raw response config argument into normalized response overrides.
+ *
+ * @param value Raw response config string.
+ * @param onInvalid Optional callback for invalid values.
+ * @returns Parsed response config, `undefined` when omitted, or `null` when invalid.
+ */
+export const parseResponseConfig = (
+    value?: string,
+    onInvalid?: (invalidValue: unknown) => void,
+): ResponseConfigData | null | undefined => {
+    const reportInvalid = (): null => {
+        if (typeof onInvalid !== 'undefined') {
+            onInvalid(value);
+        }
+
+        return null;
+    };
+    const supportedResponseTypes = [
+        'basic',
+        'cors',
+        'error',
+        'opaque',
+        'opaqueredirect',
+    ];
+    const supportedStatusTexts = [
+        '',
+        'OK',
+        'Continue',
+        'Not Found',
+    ];
+
+    if (typeof value === 'undefined') {
+        return undefined;
+    }
+
+    if (supportedResponseTypes.indexOf(value) !== -1) {
+        return {
+            type: value,
+        };
+    }
+
+    const trimmedResponseConfig = value.trim();
+    if (!trimmedResponseConfig.startsWith('{') || !trimmedResponseConfig.endsWith('}')) {
+        return reportInvalid();
+    }
+
+    let parsedResponseConfig;
+    try {
+        parsedResponseConfig = JSON.parse(trimmedResponseConfig);
+    } catch {
+        return reportInvalid();
+    }
+
+    if (
+        !parsedResponseConfig
+        || Array.isArray(parsedResponseConfig)
+        || typeof parsedResponseConfig !== 'object'
+    ) {
+        return reportInvalid();
+    }
+
+    const normalizedResponseConfig: ResponseConfigData = {};
+    const responseConfigKeys = Object.keys(parsedResponseConfig);
+
+    for (let i = 0; i < responseConfigKeys.length; i += 1) {
+        const key = responseConfigKeys[i];
+        const parsedValue = parsedResponseConfig[key];
+
+        if ((key === 'ok' || key === 'redirected') && typeof parsedValue === 'boolean') {
+            normalizedResponseConfig[key] = parsedValue;
+            continue;
+        }
+
+        if (key === 'status' && isValidResponseStatus(parsedValue)) {
+            normalizedResponseConfig[key] = parsedValue;
+            continue;
+        }
+
+        if (
+            key === 'statusText'
+            && typeof parsedValue === 'string'
+            && supportedStatusTexts.indexOf(parsedValue) !== -1
+        ) {
+            normalizedResponseConfig[key] = parsedValue;
+            continue;
+        }
+
+        if (
+            key === 'type'
+            && typeof parsedValue === 'string'
+            && supportedResponseTypes.indexOf(parsedValue) !== -1
+        ) {
+            normalizedResponseConfig[key] = parsedValue;
+            continue;
+        }
+
+        return reportInvalid();
+    }
+
+    return normalizedResponseConfig;
+};
+
+/**
+ * Merges parsed response config with a fallback response type.
+ *
+ * @param parsedConfig Parsed response config.
+ * @param fallbackType Response type inferred from the request.
+ * @returns Resolved response config.
+ */
+export const getResolvedResponseConfig = (
+    parsedConfig?: ResponseConfigData | null,
+    fallbackType?: string,
+): ResponseConfigData => {
+    const resolvedResponseConfig: ResponseConfigData = {};
+
+    if (typeof fallbackType !== 'undefined') {
+        resolvedResponseConfig.type = fallbackType;
+    }
+
+    if (typeof parsedConfig === 'undefined' || parsedConfig === null) {
+        return resolvedResponseConfig;
+    }
+
+    return Object.assign(resolvedResponseConfig, parsedConfig);
 };
 
 /**
@@ -199,10 +350,16 @@ export const createResponse = (
     if (typeof url === 'undefined') {
         url = typeof responseData.requestUrl === 'undefined' ? '' : responseData.requestUrl;
     }
+    const isFilteredResponse = typeof filteredDefaults.body !== 'undefined';
     let headers = responseData.headers;
-    if (typeof headers === 'undefined') {
+    if (isFilteredResponse) {
+        // Filtered responses such as `Response.error()` and
+        // `fetch(..., { mode: 'no-cors' })` expose an empty header list,
+        // so synthetic filtered responses must ignore any caller-supplied headers.
+        headers = {};
+    } else if (typeof headers === 'undefined') {
         headers = {
-            'Content-Length': finalBody === null ? '0' : String(finalBody.length),
+            'Content-Length': body === null ? '0' : String(body.length),
         };
     }
     const safeStatus = getSafeResponseStatus(status);
