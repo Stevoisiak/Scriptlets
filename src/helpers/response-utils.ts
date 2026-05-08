@@ -92,25 +92,25 @@ export const parseResponseConfig = (
 
         return null;
     };
-    const supportedResponseTypes = [
+    const supportedResponseTypes = new Set([
         'basic',
         'cors',
         'error',
         'opaque',
         'opaqueredirect',
-    ];
-    const supportedStatusTexts = [
+    ]);
+    const supportedStatusTexts = new Set([
         '',
         'OK',
         'Continue',
         'Not Found',
-    ];
+    ]);
 
     if (typeof value === 'undefined') {
         return undefined;
     }
 
-    if (supportedResponseTypes.indexOf(value) !== -1) {
+    if (supportedResponseTypes.has(value)) {
         return {
             type: value,
         };
@@ -156,7 +156,7 @@ export const parseResponseConfig = (
         if (
             key === 'statusText'
             && typeof parsedValue === 'string'
-            && supportedStatusTexts.indexOf(parsedValue) !== -1
+            && supportedStatusTexts.has(parsedValue)
         ) {
             normalizedResponseConfig[key] = parsedValue;
             continue;
@@ -165,7 +165,7 @@ export const parseResponseConfig = (
         if (
             key === 'type'
             && typeof parsedValue === 'string'
-            && supportedResponseTypes.indexOf(parsedValue) !== -1
+            && supportedResponseTypes.has(parsedValue)
         ) {
             normalizedResponseConfig[key] = parsedValue;
             continue;
