@@ -86,7 +86,7 @@ export const parseResponseConfig = (
     onInvalid?: (invalidValue: unknown) => void,
 ): ResponseConfigData | null | undefined => {
     const reportInvalid = (): null => {
-        if (typeof onInvalid !== 'undefined') {
+        if (typeof onInvalid === 'function') {
             onInvalid(value);
         }
 
