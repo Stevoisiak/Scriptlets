@@ -376,7 +376,7 @@ export const createResponse = (
         headers = {};
     } else if (typeof headers === 'undefined') {
         headers = {
-            'Content-Length': body === null ? '0' : String(body.length),
+            'Content-Length': body === null ? '0' : String(new TextEncoder().encode(body).length),
         };
     }
     const safeStatus = getSafeResponseStatus(status);

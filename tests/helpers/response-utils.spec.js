@@ -371,6 +371,18 @@ describe('Response utils tests', () => {
         expect(response.headers.get('x-test')).toBeNull();
     });
 
+    test('Creates synthetic response with correct byte-length Content-Length for multi-byte body', async () => {
+        // Emoji '😀' is 2 UTF-16 code units but 4 UTF-8 bytes.
+        // Content-Length must reflect byte count, not code-unit count.
+        const response = createResponse({
+            body: '😀',
+            requestUrl: 'https://example.org/data',
+        });
+
+        expect(await response.text()).toStrictEqual('😀');
+        expect(response.headers.get('content-length')).toStrictEqual('4');
+    });
+
     test('Creates synthetic response allowing zero status override', async () => {
         const response = createResponse({
             body: 'test',
