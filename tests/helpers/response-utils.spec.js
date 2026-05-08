@@ -287,6 +287,7 @@ describe('Response utils tests', () => {
             type: 'error',
         });
 
+        // Body and content-length should be filtered out for error responses.
         expect(response.body).toBeNull();
         expect(response.headers.get('content-length')).toBeNull();
         expect(response.ok).toBeTruthy();
@@ -307,6 +308,7 @@ describe('Response utils tests', () => {
             type: 'opaque',
         });
 
+        // All headers should be filtered out for opaque responses.
         expect(response.headers.get('content-length')).toBeNull();
         expect(response.headers.get('x-test')).toBeNull();
     });
