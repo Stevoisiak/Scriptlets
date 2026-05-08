@@ -374,8 +374,10 @@ if (!isSupported) {
         const response = await fetch(INPUT_JSON_PATH, init);
 
         assert.strictEqual(response.type, ERROR_RESPONSE_TYPE, 'Response type is set');
-        assert.strictEqual(response.status, 200, 'Response status is kept on modified response');
-        assert.strictEqual(response.ok, true, 'Response ok is kept on modified response');
+        assert.strictEqual(response.status, 0, 'Response status follows filtered type default');
+        assert.strictEqual(response.ok, false, 'Response ok follows filtered type default');
+        assert.strictEqual(response.body, null, 'Response body is null for filtered type');
+        assert.strictEqual(response.url, '', 'Response url is empty for filtered type');
         assert.strictEqual(window.hit, 'FIRED', 'hit function fired');
         done();
     });
@@ -517,15 +519,14 @@ if (!isSupported) {
         runScriptlet(name, ['*', 'emptyArr', RESPONSE_VALUE]);
 
         const response = await fetch(inputRequest);
-        const responseJsonData = await response.json();
 
         assert.strictEqual(response.type, 'opaqueredirect', 'response type is overridden');
         assert.strictEqual(response.status, 404, 'response status is overridden');
         assert.strictEqual(response.statusText, 'Not Found', 'response statusText is overridden');
         assert.strictEqual(response.ok, false, 'response ok is overridden');
         assert.strictEqual(response.redirected, true, 'response redirected is overridden');
-        assert.true(response.url.includes(TEST_FILE_NAME), 'response url is preserved');
-        assert.ok(Array.isArray(responseJsonData) && responseJsonData.length === 0, 'response data is an empty array');
+        assert.strictEqual(response.url, '', 'response url follows filtered type default');
+        assert.strictEqual(response.body, null, 'response body is null for filtered type');
         assert.strictEqual(window.hit, 'FIRED', 'hit function fired');
         done();
     });
@@ -608,14 +609,12 @@ if (!isSupported) {
             TEST_RESPONSE_TYPE,
             `response type is modified, equals to ${TEST_RESPONSE_TYPE}`,
         );
-        assert.true(response.url.includes(TEST_FILE_NAME), 'response url not modified');
-        assert.true(headersCount > 1, 'original headers not modified');
-
-        const responseJsonData = await response.json();
-        assert.ok(
-            Array.isArray(responseJsonData) && responseJsonData.length === 0,
-            'response data is an empty array',
-        );
+        assert.strictEqual(response.url, '', 'response url follows filtered type default');
+        assert.strictEqual(headersCount, 0, 'headers are empty for filtered type');
+        assert.strictEqual(response.body, null, 'response body is null for filtered type');
+        assert.strictEqual(response.status, 0, 'response status follows filtered type default');
+        assert.strictEqual(response.statusText, '', 'response statusText follows filtered type default');
+        assert.strictEqual(response.ok, false, 'response ok follows filtered type default');
         assert.strictEqual(window.hit, 'FIRED', 'hit function fired');
         done();
     });

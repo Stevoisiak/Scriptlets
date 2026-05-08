@@ -280,36 +280,53 @@ export const modifyResponse = (
         body: '{}',
     },
 ): Response => {
-    const headers = copyResponseHeaders(origResponse?.headers);
     const body = typeof replacement.body === 'undefined' ? '{}' : replacement.body;
-    const status = typeof replacement.status === 'undefined' ? origResponse.status : replacement.status;
-    const statusText = typeof replacement.statusText === 'undefined' ? origResponse.statusText : replacement.statusText;
+    const type = typeof replacement.type === 'undefined' ? origResponse.type : replacement.type;
+    const filteredDefaults = getFilteredResponseDefaults(type);
+    const finalBody = typeof filteredDefaults.body === 'undefined' ? body : filteredDefaults.body;
+    let status = replacement.status;
+    if (typeof status === 'undefined') {
+        status = typeof filteredDefaults.status === 'undefined' ? origResponse.status : filteredDefaults.status;
+    }
+    let statusText = replacement.statusText;
+    if (typeof statusText === 'undefined') {
+        statusText = typeof filteredDefaults.statusText === 'undefined'
+            ? origResponse.statusText
+            : filteredDefaults.statusText;
+    }
     let ok = replacement.ok;
     if (typeof ok === 'undefined') {
-        ok = typeof replacement.status === 'undefined' ? origResponse.ok : isSuccessResponseStatus(status);
+        ok = typeof replacement.status === 'undefined' && typeof filteredDefaults.ok === 'undefined'
+            ? origResponse.ok
+            : isSuccessResponseStatus(status);
     }
     const redirected = typeof replacement.redirected === 'undefined'
         ? origResponse.redirected
         : replacement.redirected;
-    const type = typeof replacement.type === 'undefined' ? origResponse.type : replacement.type;
+    let url = filteredDefaults.url;
+    if (typeof url === 'undefined') {
+        url = origResponse.url;
+    }
+    const isFilteredResponse = typeof filteredDefaults.body !== 'undefined';
+    const headers = isFilteredResponse ? {} : copyResponseHeaders(origResponse?.headers);
     const safeStatus = getSafeResponseStatus(status);
     // Response init rejects statuses below 200, so construct safely and patch the final exposed status after.
     const responseInitStatus = safeStatus < 200 ? 200 : safeStatus;
 
-    const modifiedResponse = new Response(body, {
+    const modifiedResponse = new Response(finalBody, {
         status: responseInitStatus,
         statusText,
         headers,
     });
 
     defineReadonlyResponseProps(modifiedResponse, {
-        body,
+        body: finalBody,
         ok,
         redirected,
         status,
         statusText,
         type,
-        url: origResponse.url,
+        url,
     });
 
     return modifiedResponse;

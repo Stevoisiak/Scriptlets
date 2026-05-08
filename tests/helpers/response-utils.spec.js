@@ -191,7 +191,7 @@ describe('Response utils tests', () => {
             redirected: true,
             status: 404,
             statusText: 'Not Found',
-            type: 'opaqueredirect',
+            type: 'cors',
         });
 
         expect(await modifiedResponse.text()).toStrictEqual('blocked');
@@ -200,8 +200,66 @@ describe('Response utils tests', () => {
         expect(modifiedResponse.redirected).toBeTruthy();
         expect(modifiedResponse.status).toStrictEqual(404);
         expect(modifiedResponse.statusText).toStrictEqual('Not Found');
-        expect(modifiedResponse.type).toStrictEqual('opaqueredirect');
+        expect(modifiedResponse.type).toStrictEqual('cors');
         expect(modifiedResponse.url).toStrictEqual('https://example.org/data');
+    });
+
+    test('Modifies response applying filtered defaults for opaque type', async () => {
+        const response = new Response('source', {
+            headers: {
+                'X-Test': '1',
+            },
+            status: 200,
+            statusText: 'OK',
+        });
+
+        Object.defineProperties(response, {
+            redirected: { value: false },
+            type: { value: 'basic' },
+            url: { value: 'https://example.org/data' },
+        });
+
+        const modifiedResponse = modifyResponse(response, {
+            type: 'opaque',
+        });
+
+        expect(modifiedResponse.body).toBeNull();
+        expect(modifiedResponse.headers.get('x-test')).toBeNull();
+        expect(modifiedResponse.ok).toBeFalsy();
+        expect(modifiedResponse.redirected).toBeFalsy();
+        expect(modifiedResponse.status).toStrictEqual(0);
+        expect(modifiedResponse.statusText).toStrictEqual('');
+        expect(modifiedResponse.type).toStrictEqual('opaque');
+        expect(modifiedResponse.url).toStrictEqual('');
+    });
+
+    test('Modifies response applying filtered defaults for error type', async () => {
+        const response = new Response('source', {
+            headers: {
+                'X-Test': '1',
+            },
+            status: 200,
+            statusText: 'OK',
+        });
+
+        Object.defineProperties(response, {
+            redirected: { value: false },
+            type: { value: 'basic' },
+            url: { value: 'https://example.org/data' },
+        });
+
+        const modifiedResponse = modifyResponse(response, {
+            type: 'error',
+        });
+
+        expect(modifiedResponse.body).toBeNull();
+        expect(modifiedResponse.headers.get('x-test')).toBeNull();
+        expect(modifiedResponse.ok).toBeFalsy();
+        expect(modifiedResponse.redirected).toBeFalsy();
+        expect(modifiedResponse.status).toStrictEqual(0);
+        expect(modifiedResponse.statusText).toStrictEqual('');
+        expect(modifiedResponse.type).toStrictEqual('error');
+        expect(modifiedResponse.url).toStrictEqual('');
     });
 
     test('Modifies response allowing informational status override', async () => {
